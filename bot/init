@@ -1,0 +1,14 @@
+#!/bin/sh
+
+#nohup ./bot_rss.py > ~/_rss.log
+./bot_rss.py > ~/_rss.log &
+./bot_twitter.py > ~/_twitter.log &
+./bot_facebook.py > ~/_facebook.log &
+./bot_token.py > ~/_token.log &
+./check_url_rss.py > ~/_cu_rss.log &
+./check_url_twitter.py > ~/_cu_twitter.log &
+./check_url_facebook.py > ~/_cu_facebook.log &
+./check_url_token.py > ~/_cu_token.log &
+cd ./eXt
+./amnt_follower.py > ~/__followers.log &
+cd ../

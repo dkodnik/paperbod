@@ -1,0 +1,344 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+############################################################
+# 0
+# подключаемся
+ssh root@paperbod.com
+
+# обновляем список пакетов (! на всякий случай)
+apt-get update
+# обновляем пакеты (! на всякий случай)
+apt-get upgrade
+
+# стави доп.программы, т.к. вошли под "root", то "sudo" не нужно!
+# ставим mc
+apt-get install mc
+# ставим htop
+apt-get install htop
+# VIM
+apt-get install vim
+# git (для бекапа)
+apt-get install git
+
+# Подключаем swap-файл на 1000Мб (у моего сервера своей памяти 512Мб):
+dd if=/dev/zero of=/var/local/swap.file bs=1M count=1000
+mkswap /var/local/swap.file
+swapon /var/local/swap.file
+# Чтобы файл подкачки подключался автоматически, добавляем в /etc/fstab строчку:
+/var/local/swap.file none swap sw 0 0
+
+############################################################
+# I - уровень безопастности ВХОДА SSH
+
+# меняем имя хоста (с длинного на "paperbod")
+vim /etc/hosts
+vim /etc/hostname
+
+# меняем порт ssh
+vim /etc/ssh/sshd_config
+# изменяем "Port 22" на "Port 5328"
+
+# перезапускаем ssh-сервер (после чего нас выкидывает)
+service ssh restart
+
+# подключаемся
+ssh -p 5328 root@paperbod.com
+
+# новый пользователь с правами root - "ixryon" :-)
+
+adduser ixryon
+usermod -a -G sudo ixryon
+# проверяем что внесен в группу sudo
+id ixryon
+# закрываем сеанс ssh
+logout
+
+#> отключеам пользователя root
+# подключаемся
+ssh -p 5328 ixryon@paperbod.com
+# удаляем пароль у root, тем самым отключая его
+sudo passwd -l root
+# закрываем вход root в ssh и разрешаем конектится только пользователю ixryon, и только по IPv4 (никаких IPv6 нам пока не надо) 
+sudo vim /etc/ssh/sshd_config
+# изменяем "PermitRootLogin yes" на "PermitRootLogin no"
+# добавляем если нет "AllowUsers ixryon"
+# добавляем если нет "AddressFamily inet # IPv4 only", или изменяем на "inet"
+
+#> делаем доступ по ssh не через пароль а по ключу
+# A)генерируем откр. и закр. ключи на клиенской машине (на ноуте или пк) Ключи по умолчанию сохраняются в домашний каталог пользователя, в файлы ~/.ssh/id_rsa (закрытый ключ) и ~/.ssh/id_rsa.pub (публичный ключ)
+#! на клиенте
+ssh-keygen
+# передаем открытый ключ на сервер
+scp -P 5328 ~/.ssh/id_rsa.pub ixryon@paperbod.com:~/id_rsa.pub
+# B)добавляем открытый ключ клиента пользователю на сервере
+#! на сервере
+mkdir ~/.ssh
+sudo sh -c 'cat ~/id_rsa.pub >> ~/.ssh/authorized_keys'
+rm ~/id_rsa.pub
+# закрываем сеанс ssh
+logout
+# проверка, "-v" выводит возможные причины или ошибки при соединение
+ssh -p 5328 -v ixryon@paperbod.com
+# C)отключаем доступ по паролю
+sudo vim /etc/ssh/sshd_config
+# изменяем "#PasswordAuthentication yes" на "PasswordAuthentication no"
+
+# перезапускаем ssh-сервер (после чего нас выкидывает?)
+sudo service ssh restart
+
+# подключаемся
+ssh -p 5328 ixryon@paperbod.com
+
+#> ставим утилиту блокировки от перебора пароля к ssh
+# используем Denyhosts вместо Fail2ban. Fail2ban-более универсальный(html,ftp,ssh и т.д.) но жрет много, а нам только нужен SSH
+#! всетаки fail2ban, т.к. он хорошо работает в связке с ufw и будет банить при попытке перебора портов!!!
+#! но ставить fail2ban надо после того как поставим nginx и настроем его!!!
+##sudo apt-get install denyhosts
+### настраиваем
+##sudo vim /etc/denyhosts.conf
+### время блокировки IP будет 3 часа ()
+##PURGE_DENY = 3h
+### адрес электронной почты для рассылки уведомлений о неудачных попытках доступа к серверу
+##ADMIN_EMAIL = webmaster@paperbod.com
+## перезапускаем сервис denyhosts
+#sudo service denyhosts restart
+
+#> Отключаем getty для всех терминалов (мы ведь только по SSH будем ходить на сервер).
+# Для этого в файле /etc/default/console-setup (для debian -> /etc/inittab
+sudo vim /etc/default/console-setup
+# находим строчку ACTIVE_CONSOLES="/dev/tty[1-6]" и изменяем на ACTIVE_CONSOLES=""
+# редактируем конф файлы
+sudo vim /etc/init/tty1.conf ...-... /etc/init/tty6.conf
+# закоментируем строку "start on runlevel [23]" на "#start on runlevel [23]"
+# После этого выполняем команду
+sudo update-initramfs -u
+
+# Установи правильные значения системных переменных
+sudo cp ./conf/sys/sysctl.conf /etc/sysctl.conf
+# если нет необходимости в перезагрузке всего сервера, то можно обновить так: sudo sysctl -p /etc/sysctl.conf
+
+
+# перезапускаем сервер
+sudo reboot
+
+############################################################
+# II - установка ПОКАЗА WEB [nginx,php]
+
+# создаем 2-х новых пользователей
+sudo adduser --gecos "Paperbod Web App User" webpaper
+sudo adduser --gecos "Paperbod Bot" botpaper
+
+# устанавливаем компоненты для сборки
+sudo apt-get install libpcre3-dev build-essential libssl-dev zlib1g-dev
+# checkinstall собирает сорцы в deb-пакет и ставит его, потом все можно зачистить обычными средствами apt-get remove nginx
+sudo apt-get install checkinstall
+
+# временная папка www, потом переназначим (нужно пока для nginx и php)
+sudo mkdir /var/www
+#sudo mkdir /var/hc_api
+#sudo mkdir /var/hc_app
+#sudo mkdir /var/hc_web
+
+#> NGINX
+# Качаем последнюю версию nginx и распаковываем.
+mkdir ~/sources
+cd ~/sources/
+wget http://nginx.org/download/nginx-1.6.0.tar.gz
+tar -zxvf nginx-1.6.0.tar.gz
+cd nginx-1.6.0/
+
+# открываем файл src/http/ngx_http_header_filter_module.c
+vim src/http/ngx_http_header_filter_module.c
+# и изменяем
+static char ngx_http_server_string[] = "Server: nginx" CRLF;
+static char ngx_http_server_full_string[] = "Server: " NGINX_VER CRLF;
+# на
+static char ngx_http_server_string[] = "Server: PiK" CRLF;
+static char ngx_http_server_full_string[] = "Server: PiK" CRLF;
+
+# собираем
+./configure \
+--without-http_autoindex_module \
+--without-http_ssi_module \
+--with-http_ssl_module \
+--user=www-data \
+--group=www-data \
+--prefix=/opt/nginx
+make
+sudo checkinstall
+
+# возвращаемся обратно в папку проекта
+cd ~/prj/_build_server
+# копируем файлы конфигурации
+sudo cp ./conf/nginx/dev.conf /opt/nginx/conf/nginx.conf
+sudo mkdir /etc/nginx
+sudo cp ./conf/nginx/nginx.conf /etc/nginx/nginx.conf
+# Редактируем /etc/init.d/nginx
+sudo cp ./conf/nginx/init_nginx /etc/init.d/nginx
+sudo chmod +x /etc/init.d/nginx
+sudo /usr/sbin/update-rc.d -f nginx defaults
+# Для запуска nginx вводим, после PHP!!!
+
+## SSL
+
+# Расшифровываем ключ, т.к. Nginx не может автоматически расшифровывать - приходится каждый раз вводить пароль
+#sudo openssl rsa -des3 -in ./conf/ssl/ssl.key -out /etc/nginx/paperbod_ssl.key
+sudo openssl rsa -in ./conf/ssl/ssl.key -out /etc/nginx/paperbod_ssl.key
+# ! Скорее всего в вашем файле ssl.pem(paperbod_ssl.crt) есть примерно такая строка: -----END CERTIFICATE----------BEGIN CERTIFICATE-----
+# ! Она возникла в результате слияния двух файлов с сертификатами, один из которых был без строки в конце файла. Ее необходимо разделить на две и все замечательно заработает.
+cat ./conf/ssl/ssl.crt ./conf/ssl/sub.class2.server.sha2.ca.pem > ~/paperbod_ssl.crt
+sudo cp ~/paperbod_ssl.crt /etc/nginx/paperbod_ssl.crt
+rm ~/paperbod_ssl.crt
+
+#> PHP
+# ставим компоненты (я не нашел php5-apc для чего он и где берется)
+sudo apt-get install php5 php5-cli php5-common php5-fpm php5-cgi php5-curl php5-gd php5-mcrypt php5-gmp
+
+#PHP 5 и JSON
+sudo apt-get install php5-json
+# Разкомментировать в /etc/php5/mods-available/json.ini :
+#priority=20
+
+# настраиваем php
+sudo vim /etc/php5/fpm/pool.d/www.conf
+# закоментируем "; listen = 127.0.0.1:9000" а добавим "listen = /var/run/php5-fpm.sock"
+# через сокет будет более безопастнее использовать php
+# настраиваем php.ini, копируем файлы конфигурации
+sudo cp ./conf/php/php.ini /etc/php5/fpm/php.ini
+
+# перезапускаем php-fpm:
+sudo /etc/init.d/php5-fpm restart
+
+# Для запуска nginx вводим:
+sudo /etc/init.d/nginx start
+
+#>MySQL
+sudo apt-get install mysql-server mysql-client php5-mysql
+
+#> Python
+sudo apt-get install python-mysqldb
+sudo apt-get install python-pip
+sudo pip install requests
+sudo pip install feedparser
+sudo pip install tweepy
+sudo pip install facebook-sdk
+
+############################################################
+# III - установка WEB
+
+#>Web site
+su - webpaper
+mkdir ~/www
+# разворачиваем в директорию "www" наш проект php (!-нужен не весь проект)
+git clone https://github.com/dkodnik/paperbod
+
+#>(!!!)Проверяем на корректность файлы, т.к. там могут быть настройки тестовой системы, а не рабочей
+# ./www/conf.php
+
+mkdir ~/www/666x
+wget http://heanet.dl.sourceforge.net/project/phpmyadmin/phpMyAdmin/4.1.7/phpMyAdmin-4.1.7-all-languages.tar.gz
+tar -zxvf phpMyAdmin-4.1.7-all-languages.tar.gz
+mv ./phpMyAdmin-4.1.7-all-languages/* ~/www/666x
+logout
+
+# изменить права файлам в каталоге ~/www/_logs/
+# в него пишет группа: www-data, webpaper, botpaper
+# что все могли писать (FIXME: !-исправить, только для определенных групп "+ 'www-data'" )
+
+#>Bot
+su - botpaper
+mkdir ~/bot
+# разворачиваем в директорию "bot" наш проект php (!-нужен не весь проект)
+git clone https://github.com/dkodnik/paperbod
+
+chmod +x ~/bot/bot_rss.py
+chmod +x ~/bot/bot_twitter.py
+chmod +x ~/bot/bot_facebook.py
+chmod +x ~/bot/bot_token.py
+chmod +x ~/bot/check_url_rss.py
+chmod +x ~/bot/check_url_twitter.py
+chmod +x ~/bot/check_url_facebook.py
+chmod +x ~/bot/check_url_token.py
+chmod +x ~/bot/eXt/amnt_follower.py
+
+chmod +x ~/bot/kill
+chmod +x ~/bot/init
+
+chmod +x ~/bot/botd.sh
+
+# возвращаемся к пользователю с sudo правами
+logout
+
+cd /var
+sudo rm -fr www
+sudo ln -s /home/webpaper/www www
+
+# рестарт сервисов
+sudo /etc/init.d/nginx restart
+sudo /etc/init.d/php5-fpm restart
+
+# Создание базы данных "dsprss"
+mysql -u root mysql --password="**!**" <<COMMANDS
+create database dsprss;
+quit
+COMMANDS
+
+# Копируем с локальной машины дамп-базы данных
+scp -P 5328 ~/prj/budb.tgz ixryon@paperbod.com:~/budb.tgz
+# Заносим структуру базы данных из файла db.sql
+mysql -u root -p dsprss < _build_server/db.sql
+
+# Для запуска, перейти по ссылке:
+#http://paperbod.com/666x/
+
+#>PHP(Cron)
+# Прописываем CRON для сервера
+sudo cp ./conf/sys/crontab.txt /etc/cron.d/paperbod
+sudo chmod +x /etc/cron.d/paperbod
+sudo /etc/init.d/cron restart
+
+
+############################################################
+# IV - уровень безопастности BAN [fail2ban, ufw, snort]
+
+#>Msmtp для отправки почты через Яндекс
+# Устанавливаем Msmtp
+sudo apt-get install msmtp
+# удалить символическую ссылку, на всякий случай
+sudo rm /usr/sbin/sendmail
+# сделать символическую ссылку, чтобы программы использующие стандартных интерфейс файла sendmail
+sudo ln -s /usr/bin/msmtp /usr/sbin/sendmail
+# Создаем файл логов
+sudo cat > /var/log/msmtp.log <<EOF
+-
+EOF
+# Записывать может под любым пользователем
+sudo chmod 0666 /var/log/msmtp.log
+
+# Настройки по умолчанию
+sudo cat > /etc/msmtprc <<EOF
+defaults
+tls on
+tls_starttls on
+tls_certcheck off
+#tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile /var/log/msmtp.log
+
+account default
+host smtp.yandex.ru
+port 25
+protocol smtp
+auth on
+user noreply@paperbod.com
+from noreply@paperbod.com
+password **!**
+#passwordeval gpg --decrypt ~/.msmtp.password.gpg
+EOF
+# Тест отправки почты
+sendmail -v yyyyyyy@email.com <<EOF
+test message for sendmai
+.
+EOF
+
+#>Настраиваем UFW
+# ???

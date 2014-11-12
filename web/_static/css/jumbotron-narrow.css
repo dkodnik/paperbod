@@ -1,0 +1,158 @@
+/* Space out content a bit */
+html {
+  overflow: hidden;
+  height: 100%;
+}
+body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+/* Everything but the jumbotron gets side spacing for mobile first views */
+.header,
+.marketing,
+.footer {
+  padding-left: 15px;
+  padding-right: 15px;
+}
+/* Custom page footer */
+.footer {
+  color: #999; /* IE8 proofing */
+  color: rgba(255,255,255,.5);
+}
+.footer a {
+  color: #fff;
+}
+
+/* Custom page header */
+.header {
+  /*border-bottom: 1px solid #e5e5e5;*/
+}
+/* Make the masthead heading the same height as the navigation */
+.header h3 {
+  margin-top: 0;
+  margin-bottom: 0;
+  line-height: 40px;
+  padding-bottom: 19px;
+}
+
+/* Обрезать текст с троеточием если он не помещается в блок */
+.min_str {
+  white-space: nowrap; /* Отменяем перенос текста */
+  overflow: hidden; /* Обрезаем содержимое */
+  text-overflow: ellipsis; /* Многоточие */
+  width: 300px;
+  margin: 0;
+}
+
+/* Customize container */
+@media (min-width: 768px) {
+  .container {
+    max-width: 730px;
+  }
+}
+.container-narrow > hr {
+  margin: 30px 0;
+}
+
+/* Main marketing message and sign up button */
+.jumbotron {
+  text-align: center;
+  /*border-bottom: 1px solid #e5e5e5;*/
+}
+.jumbotron .btn {
+  font-size: 21px;
+  padding: 14px 24px;
+}
+
+/* Supporting marketing content */
+.marketing {
+  margin: 40px 0;
+}
+.marketing p + h4 {
+  margin-top: 28px;
+}
+
+/* Responsive: Portrait tablets and up */
+@media screen and (min-width: 768px) {
+  /* Remove the padding we set earlier */
+  .header,
+  .marketing,
+  .footer {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* Space out the masthead */
+  .header {
+    margin-bottom: 30px;
+  }
+  /* Remove the bottom border on the jumbotron for visual effect */
+  .jumbotron {
+    border-bottom: 0;
+  }
+}
+
+#backgroundfont {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+#backgroundfont2 {
+  z-index: -1;
+  height: 100%;
+  width: 100%;
+}
+#backgroundfont2 img{
+  /*filter: blur(5px);
+  -webkit-filter: blur(5px);
+  -moz-filter: blur(5px);
+  -o-filter: blur(5px);
+  -ms-filter: blur(5px);*/
+}
+
+/*
+ * Header
+ */
+.header .nav > li {
+  display: inline-block;
+}
+.header .nav > li + li {
+  margin-left: 20px;
+}
+.header .nav > li > a {
+  padding-left: 0;
+  padding-right: 0;
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff; /* IE8 proofing */
+  color: rgba(255,255,255,.75);
+  border-bottom: 2px solid transparent;
+}
+.header .nav > li > a:hover,
+.header .nav > li > a:focus {
+  background-color: transparent;
+  border-bottom-color: rgba(255,255,255,.25);
+}
+.header .nav > .active > a,
+.header .nav > .active > a:hover,
+.header .nav > .active > a:focus {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+.table {
+  background-color: rgba(0,0,0,.6)
+}
+.table tr:hover {
+  color:#000;
+}
+
+.nav-pills>li>a {
+  border-radius: 0px;
+}
